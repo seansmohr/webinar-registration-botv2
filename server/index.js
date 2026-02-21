@@ -33,13 +33,22 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Serve static frontend in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/dist')));
+// Serve static frontend (always serve if dist exists, not just in production)
+const distPath = path.join(__dirname, '../client/dist');
+const fs = require('fs');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  // Fallback: return a simple response on / so Railway health check passes
+  app.get('/', (req, res) => {
+    res.json({ status: 'ok', service: 'webinar-registration-bot' });
   });
 }
+
+let server;
 
 async function start() {
   try {
@@ -55,7 +64,7 @@ async function start() {
     startScheduler();
     logger.info('Scheduler started');
 
-    app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
     });
   } catch (err) {
@@ -63,6 +72,26 @@ async function start() {
     process.exit(1);
   }
 }
+
+// Graceful shutdown — handle Railway's SIGTERM cleanly
+function shutdown(signal) {
+  logger.info(`Received ${signal}, shutting down gracefully...`);
+  if (server) {
+    server.close(() => {
+      db.pool.end().then(() => {
+        logger.info('Server and database connections closed');
+        process.exit(0);
+      });
+    });
+  } else {
+    process.exit(0);
+  }
+  // Force exit after 10 seconds if graceful shutdown hangs
+  setTimeout(() => process.exit(0), 10000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 start();
 
