@@ -28,16 +28,26 @@ const retellClient = axios.create({
 async function createOutboundCall({ phoneNumber, callType, contactFirstName, webinarLabel }) {
   const agentId = callType === 'call1' ? AGENT_ID_CALL1 : AGENT_ID_CALL2;
 
+  const payload = {
+    from_number: FROM_NUMBER,
+    to_number: phoneNumber,
+    override_agent_id: agentId,
+    retell_llm_dynamic_variables: {
+      contact_first_name: contactFirstName || 'there',
+      webinar_label: webinarLabel || 'the upcoming webinar',
+    },
+  };
+
+  logger.info('Retell create call request', {
+    callType,
+    from_number: FROM_NUMBER,
+    to_number: phoneNumber,
+    agentId,
+    apiKeyPrefix: API_KEY ? API_KEY.substring(0, 8) + '...' : 'MISSING',
+  });
+
   try {
-    const response = await retellClient.post('/v2/create-phone-call', {
-      from_number: FROM_NUMBER,
-      to_number: phoneNumber,
-      override_agent_id: agentId,
-      retell_llm_dynamic_variables: {
-        contact_first_name: contactFirstName || 'there',
-        webinar_label: webinarLabel || 'the upcoming webinar',
-      },
-    });
+    const response = await retellClient.post('/v2/create-phone-call', payload);
 
     logger.info('Retell outbound call created', {
       callType,
@@ -49,8 +59,11 @@ async function createOutboundCall({ phoneNumber, callType, contactFirstName, web
   } catch (err) {
     logger.error('Retell create call error', {
       error: err.response?.data || err.message,
+      statusCode: err.response?.status,
       callType,
       phoneNumber,
+      from_number: FROM_NUMBER,
+      agentId,
     });
     return null;
   }
