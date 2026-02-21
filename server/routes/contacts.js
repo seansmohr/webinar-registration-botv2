@@ -152,6 +152,81 @@ router.put('/:id/override', async (req, res) => {
 });
 
 /**
+ * DELETE /api/contacts/:id
+ * Delete a single contact and its call logs.
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const contactResult = await db.query('SELECT * FROM contacts WHERE id = $1', [id]);
+    if (contactResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    await db.query('DELETE FROM call_logs WHERE contact_id = $1', [id]);
+    await db.query('DELETE FROM contacts WHERE id = $1', [id]);
+
+    logger.info('Contact deleted', { contactId: id });
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('Error deleting contact', { error: err.message });
+    res.status(500).json({ error: 'Failed to delete contact' });
+  }
+});
+
+/**
+ * POST /api/contacts/:id/trigger-call
+ * Manually trigger an immediate call (call1 or call2) for a contact.
+ */
+router.post('/:id/trigger-call', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { callType } = req.body;
+
+    if (!['call1', 'call2'].includes(callType)) {
+      return res.status(400).json({ error: 'callType must be "call1" or "call2"' });
+    }
+
+    const contactResult = await db.query('SELECT * FROM contacts WHERE id = $1', [id]);
+    if (contactResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    const contact = contactResult.rows[0];
+
+    // Update stage and reset status so the call can proceed
+    const statusCol = callType === 'call1' ? 'call1_status' : 'call2_status';
+    const nextCol = callType === 'call1' ? 'call1_next_attempt' : 'call2_next_attempt';
+
+    await db.query(
+      `UPDATE contacts SET
+        current_stage = $1,
+        ${statusCol} = 'not_called',
+        ${nextCol} = NOW(),
+        is_completed = FALSE,
+        manual_override = TRUE,
+        updated_at = NOW()
+      WHERE id = $2`,
+      [callType, id]
+    );
+
+    // Re-fetch the updated contact and attempt the call immediately
+    const updated = await db.query('SELECT * FROM contacts WHERE id = $1', [id]);
+    const { attemptCall } = require('../services/callScheduler');
+    await attemptCall(updated.rows[0], callType);
+
+    logger.info('Manual call triggered', { contactId: id, callType });
+
+    const final = await db.query('SELECT * FROM contacts WHERE id = $1', [id]);
+    res.json({ success: true, contact: final.rows[0] });
+  } catch (err) {
+    logger.error('Error triggering call', { error: err.message });
+    res.status(500).json({ error: 'Failed to trigger call' });
+  }
+});
+
+/**
  * POST /api/contacts/sync
  * Trigger a manual sync from GHL.
  */

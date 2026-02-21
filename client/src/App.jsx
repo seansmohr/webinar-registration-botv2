@@ -71,6 +71,28 @@ function App() {
     }
   };
 
+  const handleDelete = async (contactId) => {
+    try {
+      await fetch(`${API_BASE}/contacts/${contactId}`, { method: 'DELETE' });
+      await fetchData();
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
+
+  const handleTriggerCall = async (contactId, callType) => {
+    try {
+      await fetch(`${API_BASE}/contacts/${contactId}/trigger-call`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callType }),
+      });
+      await fetchData();
+    } catch (err) {
+      console.error('Trigger call failed:', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -137,7 +159,7 @@ function App() {
         {loading ? (
           <div className="text-center py-12 text-gray-500">Loading contacts...</div>
         ) : (
-          <ContactTable contacts={contacts} onOverride={handleOverride} />
+          <ContactTable contacts={contacts} onOverride={handleOverride} onDelete={handleDelete} onTriggerCall={handleTriggerCall} />
         )}
 
         {/* Recent Calls */}
