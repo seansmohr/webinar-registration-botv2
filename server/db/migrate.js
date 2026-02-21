@@ -1,7 +1,3 @@
-require('dotenv').config();
-const { pool } = require('./index');
-const logger = require('../utils/logger');
-
 const migration = `
   CREATE TABLE IF NOT EXISTS contacts (
     id SERIAL PRIMARY KEY,
@@ -72,15 +68,51 @@ const migration = `
   CREATE INDEX IF NOT EXISTS idx_call_logs_retell ON call_logs(retell_call_id);
 `;
 
-async function migrate() {
-  try {
-    await pool.query(migration);
-    logger.info('Database migration completed successfully');
-    process.exit(0);
-  } catch (err) {
-    logger.error('Migration failed', { error: err.message });
-    process.exit(1);
+/**
+ * Run migration with retry logic.
+ * Waits for the database to become available (useful on Railway where
+ * the Postgres service may start slightly after the app container).
+ *
+ * Can be called from server/index.js at startup, or run standalone via `npm run db:migrate`.
+ */
+async function runMigration(pool, logger, { maxRetries = 10, delayMs = 3000 } = {}) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await pool.query(migration);
+      logger.info('Database migration completed successfully');
+      return;
+    } catch (err) {
+      logger.warn(`Migration attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      if (attempt === maxRetries) {
+        throw new Error(`Migration failed after ${maxRetries} attempts: ${err.message}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
 }
 
-migrate();
+module.exports = { runMigration, migration };
+
+// Allow running standalone: node server/db/migrate.js
+if (require.main === module) {
+  require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+  const { Pool } = require('pg');
+  const logger = require('../utils/logger');
+
+  if (!process.env.DATABASE_URL) {
+    logger.error('DATABASE_URL environment variable is not set');
+    process.exit(1);
+  }
+
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  });
+
+  runMigration(pool, logger)
+    .then(() => process.exit(0))
+    .catch((err) => {
+      logger.error('Migration failed', { error: err.message });
+      process.exit(1);
+    });
+}

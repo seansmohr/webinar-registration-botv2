@@ -1,9 +1,12 @@
-require('dotenv').config();
+// Load .env only if DATABASE_URL is not already set (Railway injects env vars directly)
+require('dotenv').config({ override: false });
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const logger = require('./utils/logger');
 const db = require('./db');
+const { runMigration } = require('./db/migrate');
 const { startScheduler } = require('./services/scheduler');
 const contactRoutes = require('./routes/contacts');
 const webhookRoutes = require('./routes/webhooks');
@@ -40,7 +43,11 @@ if (process.env.NODE_ENV === 'production') {
 
 async function start() {
   try {
-    // Test database connection
+    // Run migration with retries (waits for DB to become available)
+    logger.info('Running database migration...');
+    await runMigration(db.pool, logger, { maxRetries: 15, delayMs: 3000 });
+
+    // Verify connection
     await db.query('SELECT 1');
     logger.info('Database connected successfully');
 
