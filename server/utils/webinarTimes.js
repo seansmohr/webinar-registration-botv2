@@ -9,7 +9,8 @@ const TAG_SCHEDULE = {
   'tuesday 6pm': { dayOfWeek: 2, hour: 18, minute: 0 },
   'thursday 1pm': { dayOfWeek: 4, hour: 13, minute: 0 },
   'saturday 11am': { dayOfWeek: 6, hour: 11, minute: 0 },
-  'friday 5pm': { dayOfWeek: 5, hour: 17, minute: 0 }, // Test tag
+  'friday 5pm': { dayOfWeek: 5, hour: 17, minute: 0 },
+  'sunday 5pm': { dayOfWeek: 7, hour: 17, minute: 0 }, // Test tag
 };
 
 /**

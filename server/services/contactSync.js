@@ -4,9 +4,9 @@ const { getContactsByTag } = require('./ghlService');
 const { getNextWebinarTime, registeredMoreThan24HoursBefore } = require('../utils/webinarTimes');
 const { computeNextCallTime } = require('./callScheduler');
 
-// Testing phase: only sync contacts with 'friday 5pm' tag
+// Testing phase: sync contacts with 'sunday 5pm' tag
 // Switch to production tags upon explicit approval
-const ACTIVE_TAGS = ['friday 5pm'];
+const ACTIVE_TAGS = ['sunday 5pm'];
 
 /**
  * Sync contacts from GHL for all active tags.
